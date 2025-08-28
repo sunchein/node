@@ -1,0 +1,476 @@
+npm create vite@latest tribe-app -- --template react
+cd tribe-app
+npm install suncalc @hebcal/core
+import React from "react";
+import SunCalc from "suncalc";
+import { HDate } from "@hebcal/core";
+
+// 支派原型定位器｜精準版 v4
+// 變更：取消 Adar I / Adar II 拆分，統一對應為「拿弗他利 Naphtali」。
+// 仍保留：城市擴充、tzeit 夜出偏移、monthName 兼容解析、Developer Tests。
+
+export default function App() {
+  // --- 城市清單（擴充：格拉斯、尼斯、表參道、耶路撒冷老城） ---
+  const CITY_DB = [
+    { name: "台北 Taipei", lat: 25.033, lon: 121.565, tz: "Asia/Taipei" },
+    { name: "台中 Taichung", lat: 24.1477, lon: 120.6736, tz: "Asia/Taipei" },
+    { name: "高雄 Kaohsiung", lat: 22.6273, lon: 120.3014, tz: "Asia/Taipei" },
+    { name: "香港 Hong Kong", lat: 22.3193, lon: 114.1694, tz: "Asia/Hong_Kong" },
+    { name: "新加坡 Singapore", lat: 1.3521, lon: 103.8198, tz: "Asia/Singapore" },
+    { name: "東京 Tokyo", lat: 35.6895, lon: 139.6917, tz: "Asia/Tokyo" },
+    { name: "東京表參道 Omotesando", lat: 35.6653, lon: 139.7123, tz: "Asia/Tokyo" },
+    { name: "首爾 Seoul", lat: 37.5665, lon: 126.9780, tz: "Asia/Seoul" },
+    { name: "巴黎 Paris", lat: 48.8566, lon: 2.3522, tz: "Europe/Paris" },
+    { name: "格拉斯 Grasse", lat: 43.6570, lon: 6.9236, tz: "Europe/Paris" },
+    { name: "尼斯 Nice", lat: 43.7102, lon: 7.2620, tz: "Europe/Paris" },
+    { name: "耶路撒冷 Jerusalem", lat: 31.7683, lon: 35.2137, tz: "Asia/Jerusalem" },
+    { name: "耶路撒冷老城 Old City", lat: 31.7767, lon: 35.2350, tz: "Asia/Jerusalem" },
+    { name: "特拉維夫 Tel Aviv", lat: 32.0853, lon: 34.7818, tz: "Asia/Jerusalem" },
+    { name: "倫敦 London", lat: 51.5074, lon: -0.1278, tz: "Europe/London" },
+    { name: "紐約 New York", lat: 40.7128, lon: -74.0060, tz: "America/New_York" },
+  ];
+
+  // --- 希伯來月 → 支派（合併 Adar I / Adar II 為 Naphtali） ---
+  const HEBREW_MONTH_TO_TRIBE: Record<string, { tribeZh: string; tribeEn: string }> = {
+    Nisan: { tribeZh: "猶大", tribeEn: "Judah" },
+    Iyyar: { tribeZh: "以薩迦", tribeEn: "Issachar" },
+    Iyar: { tribeZh: "以薩迦", tribeEn: "Issachar" }, // 拼寫兼容
+    Sivan: { tribeZh: "西布倫", tribeEn: "Zebulun" },
+    Tammuz: { tribeZh: "流便", tribeEn: "Reuben" },
+    Av: { tribeZh: "西緬", tribeEn: "Simeon" },
+    Elul: { tribeZh: "迦得", tribeEn: "Gad" },
+    Tishrei: { tribeZh: "以法蓮", tribeEn: "Ephraim" },
+    Tishri: { tribeZh: "以法蓮", tribeEn: "Ephraim" }, // 拼寫兼容
+    Cheshvan: { tribeZh: "瑪拿西", tribeEn: "Manasseh" },
+    Heshvan: { tribeZh: "瑪拿西", tribeEn: "Manasseh" }, // 拼寫兼容
+    Marcheshvan: { tribeZh: "瑪拿西", tribeEn: "Manasseh" }, // 拼寫兼容
+    Kislev: { tribeZh: "便雅憫", tribeEn: "Benjamin" },
+    Tevet: { tribeZh: "但", tribeEn: "Dan" },
+    Teves: { tribeZh: "但", tribeEn: "Dan" }, // 拼寫兼容
+    Shevat: { tribeZh: "亞設", tribeEn: "Asher" },
+    Shvat: { tribeZh: "亞設", tribeEn: "Asher" }, // 拼寫兼容
+    Adar: { tribeZh: "拿弗他利", tribeEn: "Naphtali" },
+    "Adar I": { tribeZh: "拿弗他利", tribeEn: "Naphtali" },
+    "Adar II": { tribeZh: "拿弗他利", tribeEn: "Naphtali" },
+  };
+
+  // --- 品牌疊圖（最新命名） ---
+  const overlays: Record<
+    string,
+    { persona: string; color: string; hex: string; scent: string }
+  > = {
+    猶大: { persona: "君王領導者 (Royal Leader)", color: "赤炎色", hex: "#FF4500", scent: "木質辛香調" },
+    流便: { persona: "情感溝通者 (Emotive Collaborator)", color: "橙曦色", hex: "#FFA500", scent: "白花麝香調" },
+    西布倫: { persona: "創意航海者 (Creative Explorer)", color: "金光色", hex: "#FFD700", scent: "柑橘花香調" },
+    以薩迦: { persona: "智慧實踐者 (Wise Implementer)", color: "翠岩色", hex: "#228B22", scent: "木質馥奇–柑苔調" },
+    迦得: { persona: "勇敢冒險者 (Brave Adventurer)", color: "蒼穹色", hex: "#00BFFF", scent: "清新木質調" },
+    西緬: { persona: "守護忠誠者 (Loyal Guardian)", color: "靛藍色", hex: "#4B0082", scent: "草本花香木質調" },
+    便雅憫: { persona: "靈敏探索者 (Perceptive Explorer)", color: "紫晶色", hex: "#9370DB", scent: "樹脂木質調" },
+    但: { persona: "審判成就者 (Judging Achiever)", color: "鎏金色", hex: "#DAA520", scent: "木質草本辛香調" },
+    約瑟: { persona: "夢想理想者 (Visionary Idealist)", color: "月光色", hex: "#F0E68C", scent: "花香柑苔調" },
+    亞設: { persona: "靈感啟發者 (Inspirational Mentor)", color: "銀河色", hex: "#E6E6FA", scent: "熏香琥珀東方調" },
+    以法蓮: { persona: "建構設計者 (Architect Planner)", color: "大地色", hex: "#8B4513", scent: "綠意柑苔調" },
+    利未: { persona: "聖潔導師 (Holy Soul Mentor)", color: "聖光色", hex: "#FFFACD", scent: "花香東方調" },
+    瑪拿西: { persona: "務實理想者 (Grounded Idealist)", color: "土黃色", hex: "#D2B48C", scent: "木質草本調" },
+    拿弗他利: { persona: "表達與靈舞者 (Expressive Dancer)", color: "冰藍銀灰色", hex: "#B0C4DE", scent: "花香清新調" },
+  };
+
+  // --- React State ---
+  const [year, setYear] = React.useState<number>(new Date().getFullYear());
+  const [month, setMonth] = React.useState<number>(1);
+  const [day, setDay] = React.useState<number>(1);
+  const [time, setTime] = React.useState<string>("12:00");
+  const [city, setCity] = React.useState<string>("台北 Taipei");
+  const [useManual, setUseManual] = React.useState<boolean>(false);
+  const [lat, setLat] = React.useState<number>(25.033);
+  const [lon, setLon] = React.useState<number>(121.565);
+  const [tz, setTz] = React.useState<string>("Asia/Taipei");
+  const [tzeitOffsetMin, setTzeitOffsetMin] = React.useState<number>(0); // 夜出偏移（分鐘）
+  const [result, setResult] = React.useState<any>(null);
+  const [tests, setTests] = React.useState<any[]>([]);
+
+  // --- Helpers ---
+  const findCity = (name: string) => CITY_DB.find((c) => c.name === name);
+  const asNumber = (v: any, fallback: number) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+  const isValidCivilDate = (y: number, m: number, d: number) => {
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+  };
+  const formatHM = (date: Date, timeZone: string) =>
+    new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  const parseHM = (str: string) => {
+    const [h, m] = (str || "").split(":").map(Number);
+    return { h: asNumber(h, 0), m: asNumber(m, 0) };
+  };
+  const compareHM = (a: { h: number; m: number }, b: { h: number; m: number }) => {
+    const A = a.h * 60 + a.m;
+    const B = b.h * 60 + b.m;
+    return A > B ? 1 : A < B ? -1 : 0;
+  };
+  const computeSunsetHM = (y: number, m: number, d: number, la: number, lo: number, timeZone: string) => {
+    const base = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    const times = SunCalc.getTimes(base, la, lo);
+    const hm = formatHM(times.sunset, timeZone);
+    return parseHM(hm);
+  };
+  const computeTzeitHM = (sunsetHM: { h: number; m: number }, offsetMin: number) => {
+    const total = sunsetHM.h * 60 + sunsetHM.m + (Number(offsetMin) || 0);
+    const h = Math.floor((((total % 1440) + 1440) % 1440) / 60);
+    const m = ((total % 60) + 60) % 60;
+    return { h, m };
+  };
+  const bumpCivilDate = (y: number, m: number, d: number) => {
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+  };
+
+  // ---- 通用的希伯來月名稱解析（修復 monthName() 不存在） ----
+  function getHebrewMonthName(hd: any): string {
+    try {
+      if (typeof hd.getMonthName === "function") return hd.getMonthName();
+    } catch {}
+    try {
+      if (typeof hd.monthName === "function") return hd.monthName();
+    } catch {}
+    try {
+      const s = String(hd).trim(); // 例："10 Tishrei 5784"、"1 Adar II 5782"
+      const parts = s.split(/\s+/);
+      const yearIdx = parts.findIndex((p) => /^\d{4,}$/.test(p));
+      if (yearIdx > 1) return parts.slice(1, yearIdx).join(" ");
+    } catch {}
+    return "";
+  }
+  function gregToHebrewMonthName(y: number, m: number, d: number): string {
+    const dateUTC = new Date(Date.UTC(y, m - 1, d, 12, 0, 0)); // 避免時區邊界
+    const hd = new HDate(dateUTC);
+    return getHebrewMonthName(hd);
+  }
+
+  // --- 主流程 ---
+  function handleCompute(e?: React.FormEvent) {
+    e?.preventDefault?.();
+
+    const Y = asNumber(year, new Date().getFullYear());
+    const M = asNumber(month, 1);
+    const D = asNumber(day, 1);
+    if (!isValidCivilDate(Y, M, D)) {
+      setResult({ error: "請輸入有效的西曆日期（年/月/日）" });
+      return;
+    }
+
+    let la: number, lo: number, timeZone: string;
+    if (!useManual) {
+      const found = findCity(city);
+      if (!found) {
+        setResult({ error: "請選擇清單中的城市，或切換為手動輸入經緯度" });
+        return;
+      }
+      la = found.lat;
+      lo = found.lon;
+      timeZone = found.tz;
+      setLat(la);
+      setLon(lo);
+      setTz(timeZone);
+    } else {
+      la = asNumber(lat, NaN);
+      lo = asNumber(lon, NaN);
+      timeZone = tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (!Number.isFinite(la) || !Number.isFinite(lo) || !timeZone) {
+        setResult({ error: "請輸入有效的經度/緯度與 IANA 時區" });
+        return;
+      }
+    }
+
+    const sunsetHM = computeSunsetHM(Y, M, D, la, lo, timeZone);
+    const inputHM = parseHM(time);
+    const tzeitHM = computeTzeitHM(sunsetHM, tzeitOffsetMin);
+    const boundaryHM = tzeitOffsetMin > 0 ? tzeitHM : sunsetHM; // 夜出偏移>0 → 用 tzeit
+
+    let calcY = Y, calcM = M, calcD = D;
+    if (compareHM(inputHM, boundaryHM) >= 0) {
+      const bumped = bumpCivilDate(Y, M, D);
+      calcY = bumped.y; calcM = bumped.m; calcD = bumped.d;
+    }
+
+    const hMonthName = gregToHebrewMonthName(calcY, calcM, calcD);
+    const tribe = HEBREW_MONTH_TO_TRIBE[hMonthName] || null;
+    if (!tribe) {
+      setResult({ error: `未能對應希伯來月：${hMonthName || "(空)"}` });
+      return;
+    }
+
+    const overlay = overlays[tribe.tribeZh] || {};
+    setResult({
+      input: { year: Y, month: M, day: D, time, city: !useManual ? city : "(手動)" },
+      geo: { lat: la, lon: lo, timeZone },
+      astro: { sunsetHM, tzeitHM, tzeitOffsetMin },
+      adjusted: { year: calcY, month: calcM, day: calcD },
+      hebrew: { monthName: hMonthName },
+      tribe,
+      overlay,
+    });
+  }
+
+  function Cell({ label, value }: { label: string; value: React.ReactNode }) {
+    return (
+      <div className="flex flex-col p-3 rounded-xl bg-white/60 border border-slate-200 shadow-sm">
+        <div className="text-xs text-slate-500">{label}</div>
+        <div className="text-base font-medium text-slate-800 break-words">{value}</div>
+      </div>
+    );
+  }
+
+  // --- Developer Tests ---
+  React.useEffect(() => {
+    handleCompute();
+    runDevTests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function runDevTests() {
+    const sample = [
+      { y: 2024, m: 4, d: 9, city: "耶路撒冷 Jerusalem", expectIn: ["Nisan"] },
+      { y: 2024, m: 10, d: 3, city: "耶路撒冷 Jerusalem", expectIn: ["Tishrei", "Tishri"] },
+      { y: 2022, m: 3, d: 10, city: "耶路撒冷 Jerusalem", expectIn: ["Adar", "Adar II"] }, // 閏年 → 皆對應 Naphtali
+      { y: 2025, m: 1, d: 10, city: "台北 Taipei", expectIn: ["Tevet", "Teves"] },
+    ];
+    const out = sample.map((c) => ({ ...c, got: gregToHebrewMonthName(c.y, c.m, c.d) }));
+    setTests(out.map((o) => ({ ...o, pass: o.expectIn.includes(o.got) })));
+  }
+
+  // --- UI ---
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-indigo-50 via-white to-amber-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 mb-2">支派原型定位器｜精準版 v4</h1>
+        <p className="text-slate-600 mb-6">
+          輸入 <span className="font-semibold">年份 / 月 / 日 / 24小時制時間 / 城市</span>。系統將：
+          ① 依城市經緯度計算當日日落；② 可選 <span className="font-semibold">夜出偏移（tzeit）</span>；
+          ③ 若出生時間在界線後，日期自動 +1；④ 換算希伯來月並對應
+          <span className="font-semibold"> 以色列支派（象徵原型）</span>。
+        </p>
+
+        <form
+          onSubmit={handleCompute}
+          className="grid grid-cols-1 md:grid-cols-6 gap-3 bg-white/70 backdrop-blur rounded-2xl p-4 border border-slate-200 shadow-md"
+        >
+          <div className="md:col-span-2">
+            <label className="block text-sm text-slate-600 mb-1">年份 (YYYY)</label>
+            <input
+              type="number"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className="w-full rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">月份 (1–12)</label>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+              className="w-full rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">日期 (1–31)</label>
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={day}
+              onChange={(e) => setDay(Number(e.target.value))}
+              className="w-full rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-600 mb-1">時間 (HH:MM)</label>
+            <input
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value))}
+              className="w-full rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm text-slate-600 mb-1">城市（或切換手動）</label>
+            {!useManual ? (
+              <input
+                list="cities"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                className="w-full rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+              />
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  type="number"
+                  step="0.0001"
+                  placeholder="緯度"
+                  value={lat}
+                  onChange={(e) => setLat(Number(e.target.value))}
+                  className="rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+                />
+                <input
+                  type="number"
+                  step="0.0001"
+                  placeholder="經度"
+                  value={lon}
+                  onChange={(e) => setLon(Number(e.target.value))}
+                  className="rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+                />
+                <input
+                  placeholder="IANA 時區，如 Asia/Taipei"
+                  value={tz}
+                  onChange={(e) => setTz(e.target.value)}
+                  className="rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+                />
+              </div>
+            )}
+            <datalist id="cities">
+              {CITY_DB.map((c) => (
+                <option key={c.name} value={c.name} />
+              ))}
+            </datalist>
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                id="manual"
+                type="checkbox"
+                checked={useManual}
+                onChange={(e) => setUseManual(e.target.checked)}
+              />
+              <label htmlFor="manual" className="text-sm text-slate-600">
+                手動輸入經緯度/時區
+              </label>
+            </div>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm text-slate-600 mb-1">夜出偏移（分鐘）</label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="number"
+                min={0}
+                max={90}
+                step={1}
+                value={tzeitOffsetMin}
+                onChange={(e) => setTzeitOffsetMin(Number(e.target.value))}
+                className="w-28 rounded-xl border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+              />
+              <button
+                type="button"
+                onClick={() => setTzeitOffsetMin(30)}
+                className="px-3 h-10 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100"
+              >
+                +30 常用
+              </button>
+              <button
+                type="button"
+                onClick={() => setTzeitOffsetMin(0)}
+                className="px-3 h-10 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100"
+              >
+                重設 0
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">若 ＞ 0，界線改用「日落＋偏移」作為晚上（tzeit）。</p>
+          </div>
+
+          <div className="md:col-span-6 flex items-end">
+            <button
+              type="submit"
+              className="w-full h-10 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 transition"
+            >
+              精準推算支派
+            </button>
+          </div>
+        </form>
+
+        {result && (
+          <div className="mt-6 space-y-4">
+            {result.error && (
+              <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700">{result.error}</div>
+            )}
+
+            {!result.error && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                  <div className="text-sm text-slate-500 mb-1">希伯來曆（已套用晚間界線）</div>
+                  <div className="text-xl font-semibold text-slate-900">{result.hebrew.monthName}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Cell label="推算支派" value={`${result.tribe.tribeZh} (${result.tribe.tribeEn})`} />
+                    <Cell
+                      label="日落時間"
+                      value={`${String(result.astro.sunsetHM.h).padStart(2, "0")}:${String(result.astro.sunsetHM.m).padStart(2, "0")}（${result.geo.timeZone}）`}
+                    />
+                    <Cell
+                      label={tzeitOffsetMin > 0 ? "夜出時間(偏移後)" : "夜出時間(未啟用)"}
+                      value={
+                        tzeitOffsetMin > 0
+                          ? `${String(result.astro.tzeitHM.h).padStart(2, "0")}:${String(result.astro.tzeitHM.m).padStart(2, "0")}`
+                          : "—"
+                      }
+                    />
+                    <Cell label="輸入 (Y/M/D)" value={`${result.input.year}/${result.input.month}/${result.input.day}`} />
+                    <Cell label="輸入時間" value={result.input.time} />
+                    <Cell
+                      label="計算用 (Y/M/D)"
+                      value={`${result.adjusted.year}/${result.adjusted.month}/${result.adjusted.day}`}
+                    />
+                    <Cell
+                      label="城市/經緯度"
+                      value={`${result.input.city}｜${result.geo.lat.toFixed(4)}, ${result.geo.lon.toFixed(4)}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                  <div className="text-sm text-slate-500 mb-1">品牌系統對接（建議）</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Cell label="人格" value={result.overlay.persona || "—"} />
+                    <Cell label="色相" value={result.overlay.color ? `${result.overlay.color} ${result.overlay.hex || ""}` : "—"} />
+                    <Cell label="香調" value={result.overlay.scent || "—"} />
+                    <Cell label="備註" value="象徵性原型映射，非血統判定" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {tests && tests.length > 0 && (
+              <details className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-slate-800">
+                <summary className="cursor-pointer font-medium">Developer Tests</summary>
+                <div className="mt-3 space-y-2">
+                  {tests.map((t, i) => (
+                    <div
+                      key={i}
+                      className={`p-3 rounded-xl border ${
+                        t.pass ? "border-emerald-300 bg-emerald-50" : "border-rose-300 bg-rose-50"
+                      }`}
+                    >
+                      <div className="text-sm">
+                        {t.y}-{t.m}-{t.d} @ {t.city}
+                      </div>
+                      <div className="text-sm">
+                        Got: <span className="font-mono">{t.got || "(empty)"}</span> | Expect one of:{" "}
+                        {t.expectIn.join(", ")}
+                      </div>
+                      <div className="text-sm font-semibold">{t.pass ? "PASS" : "CHECK"}</div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
+              精準說明：日落使用 SunCalc，夜出可選偏移（預設 0，常用 30 分）。希伯來月以 @hebcal/core 轉換並以
+              通用解析取得月份名稱；Adar I/II 一律對應「拿弗他利」。若需不同流派或更多城市，我可再擴充。
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+npm run dev
